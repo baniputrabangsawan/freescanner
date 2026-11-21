@@ -15,6 +15,16 @@ android {
         versionName = "1.4.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+    buildTypes {
+        // Side-loadable release build signed with the debug key: no DEBUGGABLE flag, so ART
+        // compiles the app ahead of time instead of interpreting/JIT-compiling at runtime.
+        // Without this, everyday use runs the JIT-heavy debug build and feels sluggish.
+        release {
+            isMinifyEnabled = false
+            isShrinkResources = false
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
     buildFeatures { compose = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }

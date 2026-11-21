@@ -54,6 +54,7 @@ import com.freescanner.model.ScanDocument
 import com.freescanner.model.ScanPage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -390,15 +391,28 @@ internal fun ScannerApp(model: AppViewModel) {
                 confirmButton = { TextButton(onClick = { val value = password; password = ""; model.receivePdf(uri, value) }, enabled = password.isNotEmpty()) { Text("Impor") } },
                 dismissButton = { TextButton(onClick = { password = ""; model.cancelPdfPassword() }) { Text("Batal") } })
         }
-        state.busy?.let { label ->
+        // Scanner setup usually finishes in a few hundred milliseconds. A modal for that window
+        // flashed "Menyiapkan pemindai…" over the launcher right before the camera appeared, so the
+        // scanner modal is delayed and only surfaces when setup is genuinely slow (first Play
+        // services download). Long operations (PDF import, OCR) still report immediately.
+        val busyLabel = state.busy
+        val scannerLabel = busyLabel == "Menyiapkan pemindai…"
+        var showBusy by remember(busyLabel) { mutableStateOf(busyLabel != null && !scannerLabel) }
+        LaunchedEffect(busyLabel) {
+            if (busyLabel != null && scannerLabel) {
+                delay(900)
+                if (state.busy == busyLabel) showBusy = true
+            }
+        }
+        if (busyLabel != null && showBusy) {
             AlertDialog(onDismissRequest = {}, confirmButton = {
-                when (label) {
+                when (busyLabel) {
                     "Menyiapkan pemindai…" -> TextButton(onClick = model::cancelScannerSetup) { Text("Batal") }
                     "Mengimpor PDF…", "Mengenali teks…" -> TextButton(onClick = model::cancelOperation) { Text("Batal") }
                 }
             }, text = {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                    CircularProgressIndicator(Modifier.size(32.dp)); Text(state.progress ?: label)
+                    CircularProgressIndicator(Modifier.size(32.dp)); Text(state.progress ?: busyLabel)
                 }
             })
         }
