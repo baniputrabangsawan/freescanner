@@ -137,6 +137,12 @@ internal fun ScannerApp(model: AppViewModel) {
                 val editable = tool in listOf(LocalTool.OCR, LocalTool.SIGN, LocalTool.PEN, LocalTool.HIGHLIGHT, LocalTool.TEXT, LocalTool.WATERMARK) ||
                     (tool in listOf(LocalTool.TXT, LocalTool.DOCX) && target.pages.any { it.text == null })
                 if (editable) {
+                    // An empty draft cannot run these tools; report instead of parking a pending
+                    // tool that would fire by itself once a page appears.
+                    if (draft?.pages?.isEmpty() == true) {
+                        model.report("Tambahkan halaman sebelum memakai alat ini.")
+                        return
+                    }
                     pendingTool = tool
                     if (draft == null) model.editDocument(target.id, pageId)
                     else pageId?.let(model::selectReviewPage)

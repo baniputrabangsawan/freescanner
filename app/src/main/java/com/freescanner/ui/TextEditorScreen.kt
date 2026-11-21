@@ -31,6 +31,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -71,6 +72,9 @@ internal fun TextEditorScreen(
     busy: Boolean = false,
 ) {
     val session: TextEditorSession = viewModel(key = "text-editor")
+    // Saving ends text entry: drop focus so the IME actually closes and the export row below
+    // is not covered by the keyboard.
+    val focus = LocalFocusManager.current
     remember(pages.firstOrNull()?.id) { session.open(pages.firstOrNull()?.id); true }
     val buffers = session.buffers
     var pendingRecognition by remember { mutableStateOf<Set<String>?>(null) }
@@ -165,7 +169,10 @@ internal fun TextEditorScreen(
                     maxLines = 16,
                 )
                 Button(
-                    onClick = { onSaveText(selected.id, buffer.value) },
+                    onClick = {
+                        onSaveText(selected.id, buffer.value)
+                        focus.clearFocus(force = true)
+                    },
                     enabled = !busy && (buffer.changed || selected.text == null),
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Simpan teks halaman") }

@@ -45,7 +45,9 @@ class PdfImporter(context: Context) {
                 throw failure
             }
             renderer.use {
-                require(renderer.pageCount > 0) { "PDF ini tidak memiliki halaman." }
+                require(renderer.pageCount in 1..MAX_IMPORTED_PAGES) {
+                    "PDF ini memiliki ${renderer.pageCount} halaman; impor dibatasi hingga $MAX_IMPORTED_PAGES halaman. Pisahkan berkasnya terlebih dahulu."
+                }
                 for (index in 0 until renderer.pageCount) {
                     currentCoroutineContext().ensureActive()
                     val file = File(directory, "page-$index.jpg")
@@ -107,5 +109,8 @@ class PdfImporter(context: Context) {
     private fun openWithPassword(descriptor: ParcelFileDescriptor, password: String): PdfRenderer =
         PdfRenderer(descriptor, LoadParams.Builder().setPassword(password).build())
 
-    private companion object { const val MAX_INPUT_BYTES = 50L * 1024 * 1024 }
+    private companion object {
+        const val MAX_INPUT_BYTES = 50L * 1024 * 1024
+        const val MAX_IMPORTED_PAGES = 200
+    }
 }

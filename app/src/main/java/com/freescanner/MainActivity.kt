@@ -39,7 +39,11 @@ class MainActivity : ComponentActivity() {
         if (result.resultCode != Activity.RESULT_OK) model.inputCanceled()
         else {
             val pages = GmsDocumentScanningResult.fromActivityResultIntent(result.data)?.pages.orEmpty()
-            if (pages.isEmpty()) model.report("Pemindai tidak mengembalikan halaman yang dapat dibaca. Coba lagi atau impor foto.")
+            if (pages.isEmpty()) {
+                // RESULT_OK without pages would otherwise strand the draft startInput created.
+                model.inputCanceled()
+                model.report("Pemindai tidak mengembalikan halaman yang dapat dibaca. Coba lagi atau impor foto.")
+            }
             else model.receiveImageResult(pages.map { it.imageUri }, InputSource.CAMERA)
         }
     }

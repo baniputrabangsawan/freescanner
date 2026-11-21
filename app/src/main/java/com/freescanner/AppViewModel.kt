@@ -359,16 +359,25 @@ internal class AppViewModel(application: Application, private val saved: SavedSt
                 saved["newInputDraftId"] = null
                 saved["inputInitialPageIds"] = null
                 saved["inputDocumentId"] = null
-            } catch (failure: IOException) {
+            } catch (failure: Exception) {
+                // Password failure keeps the draft for retry; any other failure must discard the
+                // untouched draft, including IllegalArgumentException from an oversized, empty,
+                // or over-page-limit PDF.
                 if (failure.cause is SecurityException && Build.VERSION.SDK_INT >= 35) {
                     mutableState.update { it.copy(pdfPasswordUri = uri) }
                 } else {
-                    if (saved.get<String>("newInputDraftId") == draft.id &&
-                        repository.getDraft(draft.id)?.pages?.map { it.id } == saved.get<ArrayList<String>>("inputInitialPageIds").orEmpty()) {
-                        repository.discardDraft(draft.id)
-                        saved["draftId"] = null
-                        saved["newInputDraftId"] = null
-                        mutableState.update { it.copy(draft = null) }
+                    // Cancellation also lands here; suspension points fail immediately in a
+                    // cancelled job, so the cleanup itself must be non-cancellable.
+                    withContext(NonCancellable) {
+                        if (saved.get<String>("newInputDraftId") == draft.id &&
+                            repository.getDraft(draft.id)?.pages?.map { it.id } ==
+                            saved.get<ArrayList<String>>("inputInitialPageIds").orEmpty()) {
+                            repository.discardDraft(draft.id)
+                            saved["draftId"] = null
+                            saved["newInputDraftId"] = null
+                            saved["inputInitialPageIds"] = null
+                            mutableState.update { it.copy(draft = null) }
+                        }
                     }
                     throw failure
                 }

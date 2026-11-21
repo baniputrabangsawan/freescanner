@@ -175,9 +175,19 @@ class DocumentExporter(
     suspend fun copyTo(file: File, destination: Uri): Unit = operation {
         require(destination.scheme == "content") { "Pilih tujuan melalui pemilih berkas Android." }
         validateExportFile(file)
-        val output = context.contentResolver.openOutputStream(destination, "wt")
-            ?: throw IOException("Tidak dapat membuka tujuan yang dipilih. Pilih lokasi lain.")
-        output.use { target -> file.inputStream().use { source -> copyCancellable(source, target) } }
+        try {
+            val output = context.contentResolver.openOutputStream(destination, "wt")
+                ?: throw IOException("Tidak dapat membuka tujuan yang dipilih. Pilih lokasi lain.")
+            output.use { target -> file.inputStream().use { source -> copyCancellable(source, target) } }
+        } catch (failure: Throwable) {
+            // "wt" already truncated the user's file; remove the incomplete document so the
+            // chosen location does not keep a corrupt copy that looks like a successful export.
+            withContext(NonCancellable) {
+                try { DocumentFile.fromSingleUri(context, destination)?.delete() }
+                catch (cleanupFailure: Exception) { failure.addSuppressed(cleanupFailure) }
+            }
+            throw failure
+        }
     }
 
     /** Creates only new files; if any write fails, removes all outputs created by this batch. */
