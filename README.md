@@ -5,6 +5,7 @@ A local-first Android document scanner. Capture or import pages, clean them up, 
 There is no account, no cloud storage, and no upload: the manifest actively removes the `INTERNET` permission.
 
 **Status:** version `1.4.0` (versionCode 10). Application ID `com.freescanner`. UI language is Indonesian.
+**In one line:** a CamScanner-style scanner that never leaves your phone — capture, straighten, clean up, annotate, read the text, and export, with the documents stored in Room plus private app files.
 
 ## Features
 
