@@ -4,8 +4,28 @@ A local-first Android document scanner. Capture or import pages, clean them up, 
 
 There is no account, no cloud storage, and no upload: the manifest actively removes the `INTERNET` permission.
 
-**Status:** version `1.4.0` (versionCode 10). Application ID `com.freescanner`. UI language is Indonesian.
+**Status:** version `1.4.1` (versionCode 11). Application ID `com.freescanner`. UI language is Indonesian.
+
 **In one line:** a CamScanner-style scanner that never leaves your phone — capture, straighten, clean up, annotate, read the text, and export, with the documents stored in Room plus private app files.
+
+## Install
+
+Releases are published at [github.com/baniputrabangsawan/freescanner/releases](https://github.com/baniputrabangsawan/freescanner/releases). Download `freescanner-<version>.apk` and open it on the phone; Android asks once for permission to install apps from the browser or file manager that downloaded it.
+
+Every release is signed with the same key, so a newer APK installs over the old one and keeps the library, folders, drafts and settings. Uninstalling the app removes them.
+
+**Automatic updates.** The app has no `INTERNET` permission and cannot check for updates itself. Use [Obtainium](https://github.com/ImranR98/Obtainium): add `https://github.com/baniputrabangsawan/freescanner` as a source and it follows the GitHub releases, downloads a new APK when one appears, and hands it to Android's installer for confirmation. The update channel stays outside the app, so the app itself remains offline.
+
+**Building a release yourself.** Release signing reads `keystore.properties` in the repository root, which is untracked:
+
+```properties
+storeFile=/absolute/path/to/release.jks
+storePassword=…
+keyAlias=freescanner
+keyPassword=…
+```
+
+`./gradlew assembleRelease` then writes `app/build/outputs/apk/release/app-release.apk`. Without that file the release build fails instead of producing an APK signed with the debug key, which could not update an installed copy.
 
 ## Features
 

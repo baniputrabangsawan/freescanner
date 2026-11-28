@@ -1,35 +1,61 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
 }
+// Release signing reads the untracked root keystore.properties, so the store and key passwords
+// never enter the repository. The release build check below fails loudly when it is missing,
+// instead of shipping a debug-signed APK that cannot update an already installed copy.
+val keystoreProperties = rootProject.file("keystore.properties")
+val hasReleaseSigning = keystoreProperties.exists()
 android {
     namespace = "com.freescanner"
     compileSdk = 35
+    if (hasReleaseSigning) {
+        val properties = Properties().apply { keystoreProperties.inputStream().use { load(it) } }
+        signingConfigs.create("release") {
+            storeFile = rootProject.file(properties.getProperty("storeFile"))
+            storePassword = properties.getProperty("storePassword")
+            keyAlias = properties.getProperty("keyAlias")
+            keyPassword = properties.getProperty("keyPassword")
+        }
+    }
     defaultConfig {
         applicationId = "com.freescanner"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
-        versionName = "1.4.0"
+        versionCode = 11
+        versionName = "1.4.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildTypes {
-        // Side-loadable release build signed with the debug key: no DEBUGGABLE flag, so ART
-        // compiles the app ahead of time instead of interpreting/JIT-compiling at runtime.
-        // Without this, everyday use runs the JIT-heavy debug build and feels sluggish.
+        // Release stays unobfuscated so side-loaded builds behave exactly like the tested code.
         release {
             isMinifyEnabled = false
             isShrinkResources = false
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release")
         }
     }
+
     buildFeatures { compose = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
     testOptions { animationsDisabled = true }
+}
+
+// Fail loudly rather than produce an unsigned or debug-signed release that cannot update an
+// already installed copy.
+tasks.matching { it.name.startsWith("assembleRelease") || it.name.startsWith("bundleRelease") }.configureEach {
+    doFirst {
+        check(hasReleaseSigning) {
+            "Release signing needs keystore.properties in the repository root " +
+                "(storeFile, storePassword, keyAlias, keyPassword)."
+        }
+    }
 }
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 dependencies {
