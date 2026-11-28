@@ -26,8 +26,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import kotlin.math.abs
 import kotlin.math.hypot
-import kotlin.math.max
-import kotlin.math.min
 
 @RunWith(AndroidJUnit4::class)
 class ImageProcessorTest {
@@ -190,32 +188,67 @@ class ImageProcessorTest {
         assertEquals(Crop.Full, processor.detectCorners(save(ambiguous)))
     }
 
-    @Test fun detectsRotatedPaperWithTrueCornersAndStableAspect() {
-        // A 240x180 white page on a dark desk, turned by hand. Before the corner rewrite the
-        // min/max (x+y) rule swapped width/height past ~45 degrees and failed outright near 135.
-        for (degrees in listOf(0, 20, 45, 60, 90, 135)) {
-            val bitmap = Bitmap.createBitmap(400, 400, Bitmap.Config.ARGB_8888)
+    @Test fun rotatedPaperCropsInsideThePageWithoutDeskBleed() {
+        // A 800x600 page on a brown desk, photographed at an angle, through the real import path
+        // (ingest -> JPEG -> detect -> render). Before the corner rewrite the min/max (x+y) rule
+        // swapped width/height past ~45 degrees and failed outright near 135; a whole-pixel outline
+        // also left a strip of desk inside the crop once refinement existed.
+        val width = 1600
+        val height = 1200
+        for (degrees in listOf(0, 25, 55, 90, 135)) {
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             Canvas(bitmap).apply {
-                drawColor(Color.rgb(40, 40, 42))
+                drawColor(Color.rgb(58, 46, 38))
                 save()
-                rotate(degrees.toFloat(), 200f, 200f)
-                drawRect(80f, 110f, 320f, 290f, Paint().apply { color = Color.WHITE })
+                rotate(degrees.toFloat(), width / 2f, height / 2f)
+                drawRect(
+                    width / 2f - 400f,
+                    height / 2f - 300f,
+                    width / 2f + 400f,
+                    height / 2f + 300f,
+                    Paint().apply { color = Color.rgb(238, 236, 229) },
+                )
                 restore()
             }
-            val detected = processor.detectCorners(save(bitmap))
+            val normalized = File(directory, "rotated-$degrees.jpg")
+            processor.ingest(Uri.fromFile(save(bitmap)), normalized)
+
+            val detected = processor.detectCorners(normalized)
             assertTrue("rot=$degrees should be detected, got $detected", detected != Crop.Full)
             assertTrue("rot=$degrees quad must stay valid", detected.isValid())
-            val c = detected.corners
-            val top = hypot(c[1].x - c[0].x, c[1].y - c[0].y)
-            val side = hypot(c[3].x - c[0].x, c[3].y - c[0].y)
-            assertEquals("rot=$degrees aspect must stay 240/180", 240f / 180f, max(top, side) / min(top, side), 0.12f)
-            var twiceArea = 0f
-            for (i in 0..3) {
-                val a = c[i]
-                val b = c[(i + 1) % 4]
-                twiceArea += a.x * b.y - a.y * b.x
+
+            // Ground truth corners, rotated about the page centre, in normalized image space.
+            val radians = Math.toRadians(degrees.toDouble())
+            val cos = Math.cos(radians).toFloat()
+            val sin = Math.sin(radians).toFloat()
+            val truth = listOf(-400f to -300f, 400f to -300f, 400f to 300f, -400f to 300f).map { (x, y) ->
+                Corner(
+                    (width / 2f + x * cos - y * sin) / width,
+                    (height / 2f + x * sin + y * cos) / height,
+                )
             }
-            assertEquals("rot=$degrees area must stay ~the page", 240f * 180f / (400f * 400f), abs(twiceArea) / 2f, 0.03f)
+            val worst = truth.maxOf { point ->
+                detected.corners.minOf { found ->
+                    hypot((found.x - point.x) * width, (found.y - point.y) * height)
+                }
+            }
+            assertTrue("rot=$degrees corner error ${"%.1f".format(worst)} px", worst < 12f)
+
+            withRender(normalized, crop = detected, maximum = 900) { rendered ->
+                // The desk is warm and dark; the page and its shading are neutral and bright.
+                var desk = 0
+                val pixels = IntArray(rendered.width * rendered.height)
+                rendered.getPixels(pixels, 0, rendered.width, 0, 0, rendered.width, rendered.height)
+                for (pixel in pixels) {
+                    val r = Color.red(pixel)
+                    val g = Color.green(pixel)
+                    val b = Color.blue(pixel)
+                    val luminance = (77 * r + 150 * g + 29 * b) shr 8
+                    if (luminance < 120 && r - b >= 12) desk++
+                }
+                val fraction = desk.toDouble() / pixels.size
+                assertTrue("rot=$degrees desk inside crop ${"%.5f".format(fraction)}", fraction < .001)
+            }
         }
     }
 
